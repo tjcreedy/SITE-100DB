@@ -16,8 +16,9 @@ library(readxl)
 library(googlesheets4)
 
 # Load functions and defaults -----------------------------------------------------------------
+
 gs4_auth("thomas.creedy@gmail.com")
-source("database_funcs.R")
+source("~/repos/SITE-100DB/database_funcs.R")
 
 # Load current db -----------------------------------------------------------------------------
 
@@ -30,27 +31,34 @@ db <- map2(sheets.all,
 
 # Read new data and clean ---------------------------------------------------------------------
 
-ASVsfull <- read_excel("ASV_matching/SITE-100_Database_Prep_2024_Online_2024-05-15.xlsx", 
-                   sheet = "1_ASV_selection")
-
-baiting <- read_excel("ASV_matching/SITE-100_Database_Prep_2024_Online_2024-05-15.xlsx", 
-                      sheet = "2_MMG_ASV_matching")
+ASVs <- read_sheet("1QCSEU9ceCjc-D9B6czyScjBlgiDwZf4UWsUkWPJhwaE", "ASV_table")
+ 
+# ASVsfull <- read_excel("ASV_matching/SITE-100_Database_Prep_2024_Online_2024-05-15.xlsx", 
+#                    sheet = "1_ASV_selection")
+# 
+# baiting <- read_excel("ASV_matching/SITE-100_Database_Prep_2024_Online_2024-05-15.xlsx", 
+#                       sheet = "2_MMG_ASV_matching")
 
 
 # Extract ASVs and baiting
 new <- list(
-  ASV = ASVsfull %>% select(project_readfile_id, asv_id, autopropose, project_sample_id) %>%
+  ASV = ASVs %>% select(project_readfile_id, asv_id, autopropose, project_sample_id) %>%
     mutate(readfile_id = NA) %>%
     relocate(readfile_id) %>%
     rename(match = autopropose),
-  baiting = baiting %>% select(asv_id, mt_id, action)
+  baiting = ASVs %>% select(asv_id, mt_id, autopropose) %>%
+    filter(autopropose == "select",
+           !is.na(mt_id)) %>%
+    select(!autopropose) %>%
+    unique
 )
 
 # Extract taxonomy renames
-taxrename <- ASVsfull %>% 
+taxrename <- ASVs %>% 
   #filter(autopropose == "select") %>% 
+  rename(family = `family...6`) %>%
   filter(!is.na(image_id)) %>%
-  select(image_id, subfamily, family,  autopropose) %>%
+  select(project_sample_id, subfamily, family,  autopropose) %>%
   rename(match = autopropose)
 
 
@@ -76,7 +84,8 @@ data$ASV %>% filter(match == "select") %>%
   print_writeifrows("ASV_matching/readfile_multiple_ASVselect.csv")
 
 # 3. Mitogenomes matching multiple ASVs
-data$baiting %>% filter(action == "CONFIRM") %>% mutate(mt_id_dup = duplicated2(mt_id)) %>%
+data$baiting %>%  unique %>% 
+  mutate(mt_id_dup = duplicated2(mt_id)) %>%
   filter(mt_id_dup) %>%
   arrange(mt_id) %>%
   print_writeifrows("ASV_matching/mt_id_multiple_ASVconfirm.csv")
@@ -93,58 +102,29 @@ data$baiting %>% mutate(mt_id_present = mt_id %in% data$mitogenomes$mt_id) %>%
   arrange(mt_id) %>%
   print_writeifrows("ASV_matching/mt_id_notin_mitogenomes.csv")
 
-# 6. inconsistent image_id taxonomies
+# 6. inconsistent project_sample_id taxonomies
 taxrename %>% 
   select(-match) %>%
-  arrange(image_id) %>%
+  arrange(project_sample_id) %>%
   unique %>%
   #filter(image_id != "0") %>%
-  group_by(image_id) %>%
+  group_by(project_sample_id) %>%
   mutate(n = n()) %>%
   ungroup() %>%
   filter(n > 1) %>%
   select(-n) %>%
-  print_writeifrows("ASV_matching/image_id_consistent.csv")
+  print_writeifrows("ASV_matching/project_sample_id_taxonomy_inconsistent.csv")
 
-# 7. image_ids in metadata
-image_id_match <- inner_join(taxrename %>% select(image_id) %>% unique, 
-                             data$metadata %>% select(nhmuk_id, project_sample_id, image_id, image_notes, morphospecies), 
-                             by = "image_id") %>%
-  mutate(match = "image_id")
+# 7. project_sample_ids in metadata
+all(taxrename$project_sample_id %in% data$metadata$project_sample_id)
 
-image_id_match <- bind_rows(
-  image_id_match, 
-  inner_join(taxrename %>% filter(!image_id %in% image_id_match$image_id) %>% select(image_id) %>% unique, 
-            data$metadata %>% select(nhmuk_id, project_sample_id, image_notes, morphospecies) %>% mutate(match = "morphospecies"), 
-            by = c("image_id" = "morphospecies")))
-
-image_id_match <- bind_rows(
-  image_id_match, 
-  inner_join(taxrename %>% filter(!image_id %in% image_id_match$image_id) %>% select(image_id) %>% unique, 
-             data$metadata %>% select(nhmuk_id, project_sample_id, image_notes, morphospecies) %>% mutate(match = "project_sample_id"), 
-             by = c("image_id" = "project_sample_id")))
-
-image_id_match <- bind_rows(
-  image_id_match, 
-  left_join(taxrename %>% filter(!image_id %in% image_id_match$image_id) %>% select(image_id) %>% unique, 
-            data$metadata %>% select(nhmuk_id, project_sample_id, image_notes, morphospecies) %>% mutate(match = "image_notes"), 
-            by = c("image_id" = "image_notes")))
-
-
-all(image_id_match$image_id %in% taxrename$image_id)
-
-image_id_match %>%
-  group_by(match) %>%
-  summarise(n())
-
-image_id_match %>% filter(is.na(match)) %>%
-  arrange(image_id) %>%
-  unique() %>%
-  print_writeifrows("ASV_matching/image_id_notin_metadata.csv")
-image_id_match %>% print_writeifrows("ASV_matching/image_id_matching_full.csv")
+# image_id_match %>% filter(is.na(match)) %>%
+#   arrange(image_id) %>%
+#   unique() %>%
+#   print_writeifrows("ASV_matching/image_id_notin_metadata.csv")
+# image_id_match %>% print_writeifrows("ASV_matching/image_id_matching_full.csv")
 
 # 8. asv_id with multiple selections
-
 data$ASV %>%
   filter(match == "select") %>%
   arrange(asv_id) %>%
