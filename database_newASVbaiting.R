@@ -32,7 +32,8 @@ db <- map2(sheets.all,
 # Read new data and clean ---------------------------------------------------------------------
 
 ASVs <- read_sheet("1QCSEU9ceCjc-D9B6czyScjBlgiDwZf4UWsUkWPJhwaE", "ASV_table")
- 
+baiting <- read_sheet("1QCSEU9ceCjc-D9B6czyScjBlgiDwZf4UWsUkWPJhwaE", "mitogenomes")
+
 # ASVsfull <- read_excel("ASV_matching/SITE-100_Database_Prep_2024_Online_2024-05-15.xlsx", 
 #                    sheet = "1_ASV_selection")
 # 
@@ -46,17 +47,14 @@ new <- list(
     mutate(readfile_id = NA) %>%
     relocate(readfile_id) %>%
     rename(match = autopropose),
-  baiting = ASVs %>% select(asv_id, mt_id, autopropose) %>%
-    filter(autopropose == "select",
-           !is.na(mt_id)) %>%
-    select(!autopropose) %>%
+  baiting = baiting %>% select(asv_id, mt_id) %>%
+    filter(asv_id %in% ASVs$asv_id) %>%
     unique
 )
 
 # Extract taxonomy renames
 taxrename <- ASVs %>% 
   #filter(autopropose == "select") %>% 
-  rename(family = `family...6`) %>%
   filter(!is.na(image_id)) %>%
   select(project_sample_id, subfamily, family,  autopropose) %>%
   rename(match = autopropose)
