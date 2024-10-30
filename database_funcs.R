@@ -10,8 +10,6 @@ library(googlesheets4)
 
 
 
-
-
 # Load functions ----------------------------------------------------------
 
 selfname <- function(x) setNames(x, x)
@@ -57,6 +55,7 @@ generate_renamer <- function(){
 
 # Load global values --------------------------------------------------------------------------
 
+sheets.metaonly <- c("metadata") %>% selfname()
 sheets.meta <- c("metadata", "DNA", "PCR", "readfile") %>% selfname()
 sheets.asvbait <- c("ASV", "baiting") %>% selfname()
 sheets.mt <- c("mitogenomes") %>% selfname()
@@ -64,4 +63,4 @@ sheets.all <- c(sheets.meta, sheets.asvbait, sheets.mt)
 
 master <- "15zzniRh36X_5nq-wroOaPldPTTzRVwiytqdgksBZmKc"
 
-
+taxlevels <- c("morphospecies", "species", "subgenus", "genus", "subtribe", "tribe", "subfamily", "family", "superfamily", "infraorder", "suborder", "order", "class")

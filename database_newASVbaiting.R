@@ -18,7 +18,7 @@ library(googlesheets4)
 # Load functions and defaults -----------------------------------------------------------------
 
 gs4_auth("thomas.creedy@gmail.com")
-source("~/repos/SITE-100DB/database_funcs.R")
+source("database_funcs.R")
 
 # Load current db -----------------------------------------------------------------------------
 

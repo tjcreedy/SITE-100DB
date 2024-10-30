@@ -44,10 +44,11 @@ newdatasets <- list(
   #danumvalley      = "1wQzBKXUuzyNIzrGtHS7ZyhKevQ_g1UcpR5eOLNEH06U",
   #frenchguiana2    = "1_mOGXj_mmsFOYIAFrkzb572r7lG3Gpu16tG7OBeJyUg"
   #panama2          = "1pWYPWIVhULFUFU6K8ah8m49fZAYmkdytsw27dX_bVzA"
+  qinling           = "1nV9G7W3nxFZWXlTFbWb4LtyDcmfEFafnSnf3jvwwnRk"
 )
 
 names(newdatasets)
-ss <-  newdatasets$panama2
+ss <-  newdatasets$qinling
 
 # Run checks on new data ---------------------------------------------------------------------
 
