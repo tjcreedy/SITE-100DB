@@ -22,8 +22,6 @@ library(rlang)
 gs4_auth("thomas.creedy@gmail.com")
 source("database_funcs.R")
 
-
-
 # Initial code for reading in old versions, no longer needed
 
 # coldetails <- getcoldetails(sheets.metaonly)
@@ -63,16 +61,16 @@ widetolong <- function(wide){
     return()
 }
 
-
 longtowide <- function(long){
   exprows <- long %>% filter(!child %in% parent) %>% nrow
-  long <- as.matrix(long %>% select(child, parent, child_rank))
+  long <- as.data.frame(long %>% select(child, parent, child_rank))
   maketaxstrings <- function(long, prev) {
     unlist(lapply(1:nrow(prev$children), function(i){
-      #i = 2
-      taxonomy <- c(setNames(prev$children[i, "child"], prev$children[i, "child_rank"]), 
+      #i = 1
+      taxonomy <- c(setNames(prev$children[i, "child"], 
+                             prev$children[i, "child_rank"]), 
                     prev$taxonomy)
-      nxt <- long[long[,"parent"] == prev$children[i, "child"], ,drop = F]
+      nxt <- long[long[,"parent"] == prev$children[i, "child"], ]
       if(nrow(nxt) == 0){
         return(list(data.frame(as.list(taxonomy))))
       } else {
@@ -83,6 +81,7 @@ longtowide <- function(long){
   }
   start <- list(children = long[long[,"parent"] == "root", ],
                 taxonomy = c())
+  #prev <- start
   output <- list_rbind(maketaxstrings(long, start)) %>%
     select(all_of(taxlevels)) %>%
     arrange(!!!syms(rev(taxlevels))) %>%
@@ -118,7 +117,8 @@ listancestors <- function(long, taxon){
 longtax <- read_sheet(master, "taxonomylong", col_types = "c")
 longtax$child_rank <- factor(longtax$child_rank, levels = taxlevels)
 
-longtax %<>% mutate(issue = NA)
+longtax %<>% mutate(issue = NA) %>%
+  unique()
 
 # 1. Is a child present more than once?
 
@@ -133,7 +133,8 @@ longtax %<>%
                         ifelse(nparent > 1, "DIFparent",
                                ifelse(n > 1, "DUPchild", issue)))) %>%
   select(-starts_with("n"))
-  
+
+longtax %>% count(issue)  
 
 # 2. Is the parent rank too much higher than the child rank? 
 
@@ -141,6 +142,11 @@ parentranks <- longtax %>%
   select(-c(parent, issue)) %>%
   unique() %>%
   rename(parent = child, parent_rank = child_rank)
+
+parentranks %>%
+  group_by(parent) %>%
+  mutate(n = n()) %>%
+  filter(n > 1)
 
 longtax %<>%
   left_join(parentranks, by = "parent") %>%
@@ -151,8 +157,6 @@ longtax %<>%
                                       issue)))) %>%
   select(-c(parent_rank, rankdist))
 
-range_clear(master, "taxonomylong", cell_rows(c(2, NA)), reformat = T)
-sheet_append(master, longtax, "taxonomylong")
 
 # 3. Are there any problems when tracking up through the tree?
 
@@ -160,27 +164,33 @@ longtax %<>%
   mutate(ancestor = map_vec(child, ~rev(listancestors(longtax, .x))[1]), # This will take a little while
          issue = ifelse(!is.na(issue), issue,
                         ifelse(str_detect("[", ancestor), paste0("ANC", ancestor), 
-                               ifelse(ancestor != "root", "ANCnotroot", issue)))) %>%
-  select(-ancestor)
+                               ifelse(ancestor != "root", "ANCnotroot", issue))))
   
+longtax %>% filter(issue == "ANCnotroot")
+longtax %>% count(ancestor)
+longtax %<>% select(-ancestor)
+
+range_clear(master, "taxonomylong", cell_rows(c(2, NA)), reformat = T)
+sheet_append(master, longtax, "taxonomylong")
 
 # Read in the long taxonomy, convert it to wide and overwrite the wide taxonomy on the DB
 
 longtax <- read_sheet(master, "taxonomylong", col_types = "c")
 longtax$child_rank <- factor(longtax$child_rank, levels = taxlevels)
 
-length(longtermchild)
 wide <- longtowide(longtax)
 
 widechild <- pmap(wide, function(...) na.omit(c(...))[1]) %>% unlist %>% unname
 length(widechild)
 
-
 range_clear(master, "taxonomy", cell_rows(c(2, NA)), reformat = T)
-sheet_append(master, , "taxonomy")
+sheet_append(master, wide , "taxonomy")
 
 # Read in the wide taxonomy, convert it to long and overwrite the long taxonomy on the DB
 
 widetax <- read_sheet(master, "taxonomy", col_types = "c")
+
+newlong <- widetolong(widetax)
+
 range_clear(master, "taxonomylong", cell_rows(c(2, NA)), reformat = T)
-sheet_append(master, widetolong(widetax), "taxonomy")
+sheet_append(master, newlong, "taxonomylong")
