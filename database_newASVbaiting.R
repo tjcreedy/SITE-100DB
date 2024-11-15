@@ -33,6 +33,7 @@ db <- map2(sheets.all,
 
 ASVs <- read_sheet("1QCSEU9ceCjc-D9B6czyScjBlgiDwZf4UWsUkWPJhwaE", "ASV_table")
 baiting <- read_sheet("1QCSEU9ceCjc-D9B6czyScjBlgiDwZf4UWsUkWPJhwaE", "mitogenomes")
+metadata <- read_sheet("1QCSEU9ceCjc-D9B6czyScjBlgiDwZf4UWsUkWPJhwaE", "metadata")
 
 # ASVsfull <- read_excel("ASV_matching/SITE-100_Database_Prep_2024_Online_2024-05-15.xlsx", 
 #                    sheet = "1_ASV_selection")
@@ -49,7 +50,8 @@ new <- list(
     rename(match = autopropose),
   baiting = baiting %>% select(asv_id, mt_id) %>%
     filter(asv_id %in% ASVs$asv_id) %>%
-    unique
+    unique %>%
+    filter(!is.na(mt_id) & !is.na(asv_id))
 )
 
 # Extract taxonomy renames
@@ -59,6 +61,12 @@ taxrename <- ASVs %>%
   select(project_sample_id, subfamily, family,  autopropose) %>%
   rename(match = autopropose)
 
+
+# Extract taxonomy_notes updates
+taxnotes <- metadata %>%
+  select(project_sample_id, taxonomy_notes) %>%
+  unique %>%
+  filter(!is.na(taxonomy_notes))
 
 # Overwrite existing ASV and baiting data with these tables -----------------------------------
 
@@ -158,3 +166,45 @@ data$ASV %>% filter(match == "select") %>%
     }, .keep = T) #%>%
   list_rbind()
   
+
+# Upload ------------------------------------------------------------------
+
+saveRDS(db, paste0("~/work/iBioGen_postdoc/MMGdatabase/SITE-100_DB_backup_", str_replace(Sys.time(), " ", "_"), ".RData"))
+  
+data$ASV %<>% select(-project_sample_id) %>%
+    rename(project_asv_id = asv_id) %>%
+    mutate(asv_id = NA) %>%
+    relocate(readfile_id, project_readfile_id, asv_id, project_asv_id, match)
+
+range_clear(master, "ASV", cell_rows(c(2, NA)), reformat = T)
+sheet_append(master, data$ASV, "ASV")
+
+data$baiting %<>%
+  rename(project_asv_id = asv_id) %>%
+  mutate(asv_id = NA) %>%
+  relocate(asv_id)
+
+range_clear(master, "baiting", cell_rows(c(2, NA)), reformat = T)
+sheet_append(master, data$baiting, "baiting")
+
+data$metadata %<>%
+  left_join(
+    taxrename %>% 
+      select(-match) %>%
+      unique() %>%
+      rename_with(~paste0("new_", .x), !project_sample_id),
+    by = "project_sample_id"
+  ) %>%
+  mutate(subfamily = ifelse(!is.na(new_subfamily), new_subfamily, subfamily),
+         family = ifelse(!is.na(new_family), new_family, family)) %>% 
+  select(-starts_with("new_"))
+
+data$metadata %<>%
+  left_join(
+    taxnotes %>% rename(new_taxonomy_notes = taxonomy_notes), by = "project_sample_id"
+  ) %>%
+  mutate(taxonomy_notes = ifelse(is.na(new_taxonomy_notes), taxonomy_notes, new_taxonomy_notes)) %>%
+  select(-new_taxonomy_notes)
+
+range_clear(master, "metadata", cell_rows(c(2, NA)), reformat = T)
+sheet_append(master, data$metadata, "metadata")

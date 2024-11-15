@@ -16,27 +16,20 @@ library(readxl)
 library(googlesheets4)
 
 # Load functions and defaults -----------------------------------------------------------------
+
 gs4_auth("thomas.creedy@gmail.com")
 source("database_funcs.R")
 
 # Load current db -----------------------------------------------------------------------------
 
-coldetails <- getcoldetails(sheets.meta)
+coldetails <- getcoldetails(sheets.metaonly)
 
-db <- map2(sheets.meta, coldetails$types, ~read_sheet(master, .x, col_types = .y)) %>% setNames(sheets.meta)
+db <- map2(sheets.metaonly, coldetails$types, ~read_sheet(master, .x, col_types = .y)) %>% setNames(sheets.metaonly)
 saveRDS(db, paste0("SITE-100_DB_backup_", str_replace(Sys.time(), " ", "_"), ".RData"))
 
 
-# Generate and apply IDs to metadata ----------------------------------------------------------
+# Check taxonomy ----------------------------------------------------------
 
-db$metadata %>% filter(is.na(nhmuk_id)) %>%
-  group_by(type) %>%
-  summarise(n = n())
-  select(nhmuk_id, project_sample_id)
-
-  
-db$metadata %>% filter(is.na(type)) %>% print(n = 100)
-metarn$nhmuk_id
 
 
 # Push to main database -----------------------------------------------------------------------
@@ -45,13 +38,44 @@ metarn$nhmuk_id
 saveRDS(db, paste0("SITE-100_DB_backup_", str_replace(Sys.time(), " ", "_"), ".RData"))
 
 # Clear data
-map(sheet, ~range_clear(master, .x, cell_rows(c(2, NA)), reformat = F))
+map(sheets.metaonly, ~range_clear(master, .x, cell_rows(c(2, NA)), reformat = F))
 
 # Push to database
-sheet_append(master, corrected, sheet)
+sheet_append(master, db$metadata, sheets.metaonly)
 
 
 
+
+
+# 
+# # Collapse taxonomy -------------------------------------------------------
+# 
+# db$metadata %<>% 
+#   rowwise() %>%
+#   mutate(dummy = "NA", 
+#          lowest_taxon = c_across(all_of(c(taxlevels[-1], "dummy"))) %>% 
+#            na.omit %>% pluck(1),
+#          lowest_taxon = na_if(lowest_taxon, "NA")) %>%
+#   relocate(lowest_taxon, .before = species) %>%
+#   select(-all_of(taxlevels[-1])) %>%
+#   select(-dummy)
+# 
+
+
+
+
+
+#   
+# db$metadata %>% filter(is.na(type)) %>% print(n = 100)
+# metarn$nhmuk_id
+
+# Generate and apply IDs to metadata ----------------------------------------------------------
+
+# db$metadata %>% filter(is.na(nhmuk_id)) %>%
+#   group_by(type) %>%
+#   summarise(n = n())
+# select(nhmuk_id, project_sample_id)
+# 
 
 # 
 # 

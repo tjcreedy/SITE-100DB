@@ -112,7 +112,9 @@ listancestors <- function(long, taxon){
   }
 }
 
-# Read it the long version, run the checks on it and then write it again
+
+
+# Read in the long version, run the checks on it and then write it again -----
 
 longtax <- read_sheet(master, "taxonomylong", col_types = "c")
 longtax$child_rank <- factor(longtax$child_rank, levels = taxlevels)
@@ -157,23 +159,25 @@ longtax %<>%
                                       issue)))) %>%
   select(-c(parent_rank, rankdist))
 
+longtax %>% count(issue)
 
 # 3. Are there any problems when tracking up through the tree?
 
 longtax %<>%
   mutate(ancestor = map_vec(child, ~rev(listancestors(longtax, .x))[1]), # This will take a little while
          issue = ifelse(!is.na(issue), issue,
-                        ifelse(str_detect("[", ancestor), paste0("ANC", ancestor), 
+                        ifelse(str_detect("\\[", ancestor), paste0("ANC", ancestor), 
                                ifelse(ancestor != "root", "ANCnotroot", issue))))
   
-longtax %>% filter(issue == "ANCnotroot")
 longtax %>% count(ancestor)
+longtax %>% filter(ancestor != "root") %>% print(n = 100)
+longtax %>% filter(issue == "ANCnotroot")
 longtax %<>% select(-ancestor)
 
 range_clear(master, "taxonomylong", cell_rows(c(2, NA)), reformat = T)
 sheet_append(master, longtax, "taxonomylong")
 
-# Read in the long taxonomy, convert it to wide and overwrite the wide taxonomy on the DB
+# Read in the long taxonomy, convert it to wide and overwrite the wide taxonomy on the DB -----
 
 longtax <- read_sheet(master, "taxonomylong", col_types = "c")
 longtax$child_rank <- factor(longtax$child_rank, levels = taxlevels)
@@ -186,7 +190,7 @@ length(widechild)
 range_clear(master, "taxonomy", cell_rows(c(2, NA)), reformat = T)
 sheet_append(master, wide , "taxonomy")
 
-# Read in the wide taxonomy, convert it to long and overwrite the long taxonomy on the DB
+# Read in the wide taxonomy, convert it to long and overwrite the long taxonomy on the DB -----
 
 widetax <- read_sheet(master, "taxonomy", col_types = "c")
 
